@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Dulmeth — Journal (read-only + add)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui, -apple-system, Roboto, Arial; padding:1.5rem; background:#f7fff8;color:#111}
+    .card{max-width:900px;margin:1rem auto;padding:1rem;background:#fff;border-radius:10px;border:1px solid #eef6ee}
+    h1{color:#2b8a3e}
+    form input, form textarea, form button{display:block;width:100%;margin:.4rem 0;padding:.5rem;border:1px solid #e6efe6;border-radius:6px}
+    .entry{border-bottom:1px dashed #eef6ee;padding:.6rem 0}
+    .date{color:#556;font-size:.9rem;margin-bottom:.3rem}
+    .note{color:#556;font-size:.9rem;margin-bottom:.4rem}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Garden Journal — Add an entry (read-only view)</h1>
+    <p class="note">Entries are added to journal.json and appear as read-only on the gallery page.</p>
+
+    <!-- method=post and action ensure non-JS fallback works (server redirects back after write) -->
+    <form id="entryForm" method="post" action="/api/journal" aria-label="Add journal entry">
+      <input id="title" name="title" placeholder="Title" required />
+      <input id="date" name="date" type="date" />
+      <textarea id="excerpt" name="excerpt" placeholder="Short excerpt (required)"></textarea>
+      <textarea id="body" name="body" placeholder="Optional full body"></textarea>
+      <button type="submit">Add entry</button>
+      <div id="formMsg" style="margin-top:.5rem;color:#556"></div>
+    </form>
+
+    <h2 style="margin-top:1rem">Recent entries</h2>
+    <div id="journalList">Loading…</div>
+
+    <p style="margin-top:1rem"><a href="/dulmeth.html">← Back to Gallery</a></p>
+  </div>
+
+  <script src="/scripts/journal.js"></script>
+</body>
+</html>

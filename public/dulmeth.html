@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Dulmeth — Summer Garden</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{ --bg:#f2fbf6; --card:#ffffffcc; --accent:#2b8a3e; --muted:#556; --col-width:180px; }
+    html,body{ height:100%; }
+    body{
+      font-family: system-ui, -apple-system, Roboto, Arial;
+      padding:1.5rem; margin:0;
+      background-color:var(--bg);
+      background-image:
+        linear-gradient(180deg, rgba(255,255,255,0.25), rgba(240,255,240,0.15)),
+        url('/images/bg.jpg');
+      background-repeat:no-repeat; background-position:center top; background-size:cover; background-attachment:fixed;
+      color:#111;
+    }
+    .card{ padding:1.25rem; border-radius:12px; max-width:1100px; margin:2rem auto; background:var(--card); box-shadow:0 8px 30px rgba(20,40,10,0.06); backdrop-filter:blur(6px) }
+    h1{ margin:0 0 .25rem 0; color:var(--accent) }
+    .lead{ margin:0 0 1rem 0; color:var(--muted) }
+    .toolbar{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem }
+    .toolbar input[type="search"], .toolbar select, .toolbar button, .toolbar input[type="range"]{ padding:.45rem .6rem; border:1px solid #e6efe6; border-radius:6px; background:#fff }
+    .toolbar .spacer{ flex:1 }
+    .gallery{ display:grid; grid-template-columns:repeat(auto-fit,minmax(var(--col-width),1fr)); gap:.9rem; margin-top:.6rem }
+    figure{ margin:0; background:#fff; border-radius:8px; overflow:hidden; border:1px solid #eef6ee; cursor:pointer }
+    figure img{ width:100%; height:140px; object-fit:cover; display:block; transition:transform .25s }
+    figure:hover img{ transform:scale(1.03) }
+    figcaption{ padding:.5rem; font-size:.92rem; color:var(--muted) }
+    .back{ display:inline-block; margin-top:1rem; color:var(--accent) }
+    .lightbox{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.7); z-index:9999; padding:1rem }
+    .lightbox.active{ display:flex }
+    .lightbox img{ max-width:calc(100% - 160px); max-height:calc(100% - 120px); border-radius:6px; box-shadow:0 6px 30px rgba(0,0,0,.6) }
+    .lb-controls{ position:absolute; top:12px; right:18px; display:flex; gap:8px }
+    .lb-controls button, .lb-nav button{ padding:.4rem .6rem; border-radius:6px; background:#fff; border:0 }
+    .lb-nav{ position:absolute; left:8px; right:8px; top:50%; transform:translateY(-50%); display:flex; justify-content:space-between; pointer-events:none }
+    .meta{ font-size:.85rem; color:var(--muted); margin-top:.5rem }
+    /* journal preview */
+    .journal-preview{ margin-bottom:1rem; border:1px solid #e8f3e8; background:#ffffffcc; padding:.8rem; border-radius:8px }
+    .journal-entry{ border-bottom:1px dashed #eef6ee; padding:.5rem 0 }
+    .journal-entry:last-child{ border-bottom:0 }
+    .journal-entry h3{ margin:0; font-size:1rem; color:var(--accent) }
+    .journal-entry .date{ font-size:.85rem; color:var(--muted); margin-bottom:.3rem }
+    @media (max-width:600px){ figure img{height:120px} .lightbox img{max-width:100%; max-height:80vh} }
+  </style>
+</head>
+<body>
+  <div class="card" id="app">
+    <h1>Dulmeth — Summer Garden</h1>
+    <p class="lead">Gallery for Dulmeth's summer garden. View photos and use the tools. Journal preview below (read-only). <a href="/journal.html" style="color:var(--accent);text-decoration:none;margin-left:.5rem">Open full journal</a></p>
+
+    <!-- Read-only Journal preview -->
+    <section class="journal-preview" aria-label="Garden journal preview">
+      <h2 style="margin:0 0 .5rem 0;color:var(--accent)">Garden Journal — Recent updates</h2>
+      <div id="journalPreview">Loading updates…</div>
+      <button id="showJournal" aria-expanded="false" style="margin-top:.5rem">Show full journal (read-only)</button>
+    </section>
+
+    <div class="toolbar" aria-hidden="false">
+      <input id="q" type="search" placeholder="Search captions..." />
+      <select id="sort">
+        <option value="name">Sort: name</option>
+        <option value="newest">Sort: newest</option>
+      </select>
+      <label title="Grid size">Grid: <input id="grid" type="range" min="140" max="340" value="180"></label>
+      <button id="toggleView">Toggle View</button>
+      <div class="spacer"></div>
+      <button id="play">Start Slideshow</button>
+      <button id="downloadAll">Download list (JSON)</button>
+    </div>
+
+    <section>
+      <h2>Gallery</h2>
+      <div id="gallery" class="gallery" aria-live="polite"></div>
+      <p class="meta" id="meta"></p>
+    </section>
+
+    <a class="back" href="/">← Back to Home</a>
+  </div>
+
+  <!-- lightbox -->
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="lb-controls">
+      <button id="lb-close" aria-label="Close">Close</button>
+    </div>
+    <div class="lb-nav">
+      <button id="lb-prev" aria-label="Previous">◀</button>
+      <button id="lb-next" aria-label="Next">▶</button>
+    </div>
+    <img id="lb-image" src="" alt="">
+  </div>
+
+  <script>
+  (function(){
+    function loadScript(src, onload, onerror){
+      var s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = onload;
+      s.onerror = onerror;
+      document.head.appendChild(s);
+    }
+
+    // Journal rendering — run regardless of whether gallery.js loads
+    (function setupJournal(){
+      var jp = document.getElementById('journalPreview');
+      var showBtn = document.getElementById('showJournal');
+      window._journalData = window._journalData || null;
+
+      var fallbackEntries = [
+        { title: 'Welcome to Dulmeth\'s Journal', date: '', excerpt: 'Journal is not available right now — showing a read-only preview.' },
+        { title: 'Planting day', date: '', excerpt: 'Planted tomatoes and basil. Sunny afternoon.' },
+        { title: 'First bloom', date: '', excerpt: 'The first flower opened today — lovely color.' }
+      ];
+
+      function renderJournalEntries(container, entries) {
+        if (!container) return;
+        container.innerHTML = '';
+        (entries || []).forEach(function(entry){
+          var d = document.createElement('div');
+          d.className = 'journal-entry';
+          d.innerHTML = '<h3>' + (entry.title || 'Untitled') + '</h3><div class="date">' + (entry.date || '') + '</div><div>' + (entry.excerpt || entry.body || '') + '</div>';
+          container.appendChild(d);
+        });
+      }
+
+      function renderPreview(data){
+        if (!jp) return;
+        var list = (data && data.slice) ? data.slice(0,3) : [];
+        renderJournalEntries(jp, list);
+        if (showBtn) {
+          showBtn.style.display = (data && data.length) ? '' : 'none';
+          showBtn.textContent = 'Show full journal (read-only)';
+          showBtn.setAttribute('aria-expanded', 'false');
+        }
+      }
+
+      function renderFull(){
+        if (!jp || !window._journalData) return;
+        renderJournalEntries(jp, window._journalData);
+        if (showBtn) {
+          showBtn.textContent = 'Collapse preview';
+          showBtn.setAttribute('aria-expanded', 'true');
+        }
+      }
+
+      if (showBtn) {
+        showBtn.addEventListener('click', function(){
+          if (showBtn.getAttribute('aria-expanded') === 'true') {
+            renderPreview(window._journalData);
+            return;
+          }
+          // Before showing full journal, fetch the latest journal/updates (no cache).
+          fetchAnyJournal().then(function(data){
+            if (data && data.length) {
+              window._journalData = data;
+            } else {
+              window._journalData = window._journalData || fallbackEntries;
+            }
+            renderFull();
+          }).catch(function(){
+            window._journalData = window._journalData || fallbackEntries;
+            renderFull();
+          });
+         });
+       }
+
+      // Initial preview fetch (try journal.json then updates.json). On failure or empty, use fallbackEntries.
+      if (jp) {
+        fetchAnyJournal().then(function(data){
+          if (data && data.length) {
+            window._journalData = data;
+          } else {
+            window._journalData = fallbackEntries;
+          }
+          renderPreview(window._journalData);
+        }).catch(function(){
+          window._journalData = fallbackEntries;
+          renderPreview(window._journalData);
+          if (jp) {
+            var note = document.createElement('div');
+            note.style.color = 'var(--muted)';
+            note.style.fontSize = '0.9rem';
+            note.style.marginBottom = '0.4rem';
+            note.textContent = '(Showing read-only offline preview)';
+            jp.insertBefore(note, jp.firstChild);
+          }
+        });
+
+        // Helper: try journal.json then updates.json (no-store)
+        function fetchAnyJournalLocal() {
+          return fetch('/journal.json', { cache: 'no-store' })
+            .then(function(res){
+              if (!res.ok) throw new Error('journal.json missing');
+              return res.json();
+            })
+            .catch(function(){
+              return fetch('/updates.json', { cache: 'no-store' })
+                .then(function(res){ if (!res.ok) throw new Error('updates.json missing'); return res.json(); });
+            });
+        }
+
+        // Expose a refresh function that updates preview only when data changed.
+        window.refreshJournal = function() {
+          return fetchAnyJournalLocal().then(function(data){
+            if (data && data.length) {
+              try {
+                var prev = JSON.stringify(window._journalData || []);
+                var next = JSON.stringify(data || []);
+                if (prev !== next) {
+                  window._journalData = data;
+                  renderPreview(window._journalData);
+                }
+              } catch (e) {
+                window._journalData = data;
+                renderPreview(window._journalData);
+              }
+            }
+            return data;
+          }).catch(function(){
+            return null;
+          });
+        };
+
+        // Poll for updates and refresh on focus
+        var POLL_MS = 10000;
+        var _pollTimer = setInterval(window.refreshJournal, POLL_MS);
+        window.addEventListener('focus', function(){ window.refreshJournal(); });
+      }
+
+      // Initial preview fetch (try journal.json then updates.json). On failure or empty, use fallbackEntries.
+      function fetchAnyJournal() {
+        return fetch('/journal.json', { cache: 'no-store' })
+          .then(function(res){
+            if (!res.ok) throw new Error('journal.json missing');
+            return res.json();
+          })
+          .catch(function(){
+            // try updates.json as fallback
+            return fetch('/updates.json', { cache: 'no-store' })
+              .then(function(res){ if (!res.ok) throw new Error('updates.json missing'); return res.json(); });
+          });
+      }
+
+      if (jp) {
+        fetchAnyJournal().then(function(data){
+          if (data && data.length) {
+            window._journalData = data;
+          } else {
+            window._journalData = fallbackEntries;
+          }
+          renderPreview(window._journalData);
+        }).catch(function(){
+          window._journalData = fallbackEntries;
+          renderPreview(window._journalData);
+          if (jp) {
+            var note = document.createElement('div');
+            note.style.color = 'var(--muted)';
+            note.style.fontSize = '0.9rem';
+            note.style.marginBottom = '0.4rem';
+            note.textContent = '(Showing read-only offline preview)';
+            jp.insertBefore(note, jp.firstChild);
+          }
+        });
+      }
+    })();
+
+    function initFallback(){
+      // Minimal interactions so the UI remains usable without gallery.js
+      var gallery = document.getElementById('gallery');
+      var grid = document.getElementById('grid');
+      var toggleView = document.getElementById('toggleView');
+      var downloadAll = document.getElementById('downloadAll');
+      var play = document.getElementById('play');
+      var q = document.getElementById('q');
+
+      // grid size control -> update CSS variable
+      if (grid) {
+        grid.addEventListener('input', function(){
+          document.documentElement.style.setProperty('--col-width', this.value + 'px');
+        });
+      }
+
+      // toggle view: add/remove a .list class (CSS not provided here; consumer can style)
+      if (toggleView) {
+        toggleView.addEventListener('click', function(){
+          gallery && gallery.classList.toggle('list');
+        });
+      }
+
+      // download JSON of images currently in DOM
+      if (downloadAll) {
+        downloadAll.addEventListener('click', function(){
+          var items = [];
+          document.querySelectorAll('#gallery img').forEach(function(img){
+            items.push({ src: img.src, alt: img.alt || '', caption: img.getAttribute('data-caption') || '' });
+          });
+          var blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'gallery.json';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        });
+      }
+
+      // Play button fallback: simple alert / toggle text
+      if (play) {
+        play.addEventListener('click', function(){
+          if (play.dataset.playing === '1') {
+            play.dataset.playing = '0';
+            play.textContent = 'Start Slideshow';
+          } else {
+            play.dataset.playing = '1';
+            play.textContent = 'Stop Slideshow';
+            // Minimal fallback: iterate images every 2s if any
+            var imgs = Array.from(document.querySelectorAll('#gallery img'));
+            if (imgs.length) {
+              var idx = 0;
+              play._interval = setInterval(function(){
+                var src = imgs[idx % imgs.length].src;
+                openLightbox(src, imgs[idx % imgs.length].alt || '');
+                idx++;
+              }, 2000);
+            }
+          }
+          // stop when toggled off
+          if (play.dataset.playing === '0' && play._interval) {
+            clearInterval(play._interval);
+            play._interval = null;
+            closeLightbox();
+          }
+        });
+      }
+
+      // Lightbox controls (close / backdrop click / Escape)
+      var lightbox = document.getElementById('lightbox');
+      var lbImage = document.getElementById('lb-image');
+      var lbClose = document.getElementById('lb-close');
+
+      function openLightbox(src, alt) {
+        if (!lightbox) return;
+        lbImage.src = src || '';
+        lbImage.alt = alt || '';
+        lightbox.classList.add('active');
+        lightbox.setAttribute('aria-hidden', 'false');
+      }
+      function closeLightbox() {
+        if (!lightbox) return;
+        lightbox.classList.remove('active');
+        lightbox.setAttribute('aria-hidden', 'true');
+        lbImage.src = '';
+      }
+
+      if (lbClose) lbClose.addEventListener('click', closeLightbox);
+      if (lightbox) {
+        lightbox.addEventListener('click', function(e){
+          if (e.target === lightbox) closeLightbox();
+        });
+      }
+      document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') closeLightbox();
+      });
+
+      // If gallery images exist statically, make them open the lightbox.
+      document.querySelectorAll('#gallery').forEach(function(g){
+        g.addEventListener('click', function(e){
+          var img = e.target && e.target.closest && e.target.closest('img');
+          if (img) openLightbox(img.src, img.alt || '');
+        });
+      });
+
+      // Basic search filter for captions (data-caption or alt)
+      if (q) {
+        q.addEventListener('input', function(){
+          var term = q.value.trim().toLowerCase();
+          document.querySelectorAll('#gallery figure').forEach(function(fig){
+            var caption = (fig.querySelector('img') && (fig.querySelector('img').getAttribute('data-caption') || fig.querySelector('img').alt)) || '';
+            fig.style.display = term ? (caption.toLowerCase().indexOf(term) >= 0 ? '' : 'none') : '';
+          });
+        });
+      }
+    }
+
+    // Try to load the real gallery script; fall back on error.
+    loadScript('/scripts/gallery.js',
+      function(){ /* gallery.js loaded successfully; it should initialize the gallery */ },
+      function(){ console.warn('Failed to load /scripts/gallery.js — using fallback behaviors'); initFallback(); }
+    );
+
+    // If gallery.js doesn't call init or is very late, ensure fallback still sets up after a short timeout.
+    setTimeout(function(){
+      // If gallery was not initialized by the external script, ensure basic hooks exist.
+      // We detect by checking for a known global (optional). If absent, call fallback.
+      if (!window.__GALLERY_INITIALIZED) {
+        initFallback();
+      }
+    }, 800);
+  })();
+  </script>
+</body>
+</html>

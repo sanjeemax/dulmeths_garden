@@ -1,0 +1,8 @@
+{
+  "images": [
+    { "file": "pic1.jpg",   "caption": "early flower buds.",      "alt": "red rose",   "date": 1680000000000 },
+    { "file": "pic2.jpg", "caption": "fast growers.",    "alt": "tomato",    "date": 1681000000000 },
+    { "file": "pic3.jpg",  "caption": "indoors or outdoors decision.",     "alt": "herbs",     "date": 1682000000000 },
+    { "file": "pic4.jpg",  "caption": "basic flower types",     "alt": "herbs",     "date": 1682000000000 }
+  ]
+}
