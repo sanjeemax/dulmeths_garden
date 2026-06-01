@@ -9,6 +9,27 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+
+
+////////////////////////////////////////////////////////
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./serviceAccountKey.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://public-reaction-counter-default-rtdb.europe-west1.firebasedatabase.app"
+});
+
+const db = admin.database();
+////////////////////////////////////////////////////////
+const VERIFY_TOKEN = "abc123";
+
+// ⚠️ Put your Page Access Token here
+const PAGE_ACCESS_TOKEN = "EAAVukixeAicBRlBS33Mc9P1qeQaZAuAHMXRYDS4xGtn1DLmzxEFqA9cn4RZAcvkFDMxZBYXAStOcZBvK38idlVS0ZBm2dg1TEQqYM7Eqggw6IvKHHP7nTfosc6JWSxo7PY2PXTt0wYS52CnNeXiq3FIJSoyFJZA08xW7yzjJ2DSuU61dz1aVUp1j7h3FL3UZA1LZAwZC8";
+
+
+
 // Facebook webhook verification token (set in your environment variables)
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'your_verify_token';
 
@@ -115,23 +136,82 @@ app.post('/api/journal', (req, res) => {
     });
 });
 
-// Facebook webhook verification (GET)
-app.get('/webhook', (req, res) => {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
 
-    // Verify webhook token
-    if (mode && token) {
-        if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
-            console.log('Webhook verified');
-            res.status(200).send(challenge);
-        } else {
-            res.sendStatus(403);
-        }
-    } else {
-        res.sendStatus(400);
+// =========================
+// 2. GRAPH API CALL
+// =========================
+async function getLikeCount(postId) {
+    try {
+        const url = `https://graph.facebook.com/v20.0/${postId}?fields=reactions.type(LIKE).summary(true)&access_token=${PAGE_ACCESS_TOKEN}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        return data?.reactions?.summary?.total_count || 0;
+
+    } catch (err) {
+        console.error("Graph API error:", err);
+        return 0;
     }
+}
+
+// Removed Firestore variant; keep RTDB implementation
+async function updateLikeCountInFirebase(postId, likeCount) {
+    await db.ref(`reactions/${postId}`).update({
+        likeCount: likeCount,
+        updatedAt: Date.now()
+    });
+
+    console.log("🔥 Firebase RTDB updated:", postId, likeCount);
+}
+
+
+// =========================
+// 3. WEBHOOK EVENTS (POST)
+// =========================
+app.post("/webhook", async (req, res) => {
+
+    console.log("🔥 WEBHOOK EVENT RECEIVED:");
+
+    const body = req.body;
+
+    try {
+        const change = body.entry?.[0]?.changes?.[0]?.value;
+
+        if (!change) {
+            return res.sendStatus(200);
+        }
+
+        const postId = change.post_id;
+
+        console.log("Event type:", change.item);
+        console.log("Verb:", change.verb);
+        console.log("Post ID:", postId);
+
+        // =========================
+        // LIKE / REACTION EVENT
+        // =========================
+        if (change.item === "reaction" && change.reaction_type === "like") {
+
+            console.log("👍 LIKE detected!");
+
+            const likeCount = await getLikeCount(postId);
+
+            console.log("📊 Current Like Count:", likeCount);
+            await updateLikeCountInFirebase(postId, likeCount);	
+        }
+
+        // Optional: comment logging
+        if (change.item === "comment") {
+            console.log("💬 Comment:", change.message);
+        }
+
+    } catch (err) {
+        console.error("Webhook processing error:", err);
+    }
+
+    // MUST respond fast to Meta
+    res.sendStatus(200);
 });
 
 // Facebook webhook events handler (POST)
