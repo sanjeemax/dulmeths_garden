@@ -45,9 +45,14 @@ app.get('/api/journal', (req, res) => {
 // Endpoint to add journal entry
 app.post('/api/journal', (req, res) => {
     const journalPath = path.join(__dirname, '../public/journal.json');
-    const { title, date, excerpt, body } = req.body;
+    let { title, date, excerpt, body } = req.body;
 
-    // Validate required fields
+    // Trim values first
+    title = (title || '').trim();
+    excerpt = (excerpt || '').trim();
+    body = (body || '').trim();
+
+    // Validate required fields after trimming
     if (!title || !excerpt) {
         return res.status(400).json({ error: 'Title and excerpt are required' });
     }
@@ -66,10 +71,10 @@ app.post('/api/journal', (req, res) => {
 
         // Create new entry
         const newEntry = {
-            title: title.trim(),
+            title: title,
             date: date || new Date().toISOString().split('T')[0],
-            excerpt: excerpt.trim(),
-            ...(body && { body: body.trim() })
+            excerpt: excerpt,
+            ...(body && { body: body })
         };
 
         // Add to beginning of array (newest first)
