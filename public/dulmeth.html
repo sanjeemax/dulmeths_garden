@@ -12,8 +12,7 @@
       padding:1.5rem; margin:0;
       background-color:var(--bg);
       background-image:
-        linear-gradient(180deg, rgba(255,255,255,0.25), rgba(240,255,240,0.15)),
-        url('/images/bg.jpg');
+        linear-gradient(180deg, rgba(255,255,255,0.25), rgba(240,255,240,0.15));
       background-repeat:no-repeat; background-position:center top; background-size:cover; background-attachment:fixed;
       color:#111;
     }
@@ -48,7 +47,7 @@
 <body>
   <div class="card" id="app">
     <h1>Dulmeth — Summer Garden</h1>
-    <p class="lead">Gallery for Dulmeth's summer garden. View photos and use the tools. Journal preview below (read-only). <a href="/journal.html" style="color:var(--accent);text-decoration:none;margin-left:.5rem">Open full journal</a></p>
+    <p class="lead">Gallery for Dulmeth's summer garden. View photos and use the tools. Journal preview below (read-only). <a href="/journal.html" style="color:var(--accent);text-decoration:none;margin-left:.25rem">Add new entry →</a></p>
 
     <!-- Read-only Journal preview -->
     <section class="journal-preview" aria-label="Garden journal preview">
@@ -164,7 +163,7 @@
             renderFull();
           });
          });
-       }
+        }
 
       // Initial preview fetch (try journal.json then updates.json). On failure or empty, use fallbackEntries.
       if (jp) {
