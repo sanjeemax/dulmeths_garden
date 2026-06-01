@@ -45,10 +45,21 @@ app.get('/api/journal', (req, res) => {
 // Endpoint to add journal entry
 app.post('/api/journal', (req, res) => {
     const journalPath = path.join(__dirname, '../public/journal.json');
+    
+    // Debug: Log entire request body
+    console.log('=== POST /api/journal ===');
+    console.log('Full request body:', JSON.stringify(req.body, null, 2));
+    console.log('Body keys:', Object.keys(req.body));
+    console.log('Body as string:', JSON.stringify(req.body));
+    
     let { title, date, excerpt, body } = req.body;
 
-    // Debug: Log what we received
-    console.log('POST /api/journal received:', { title, date, excerpt, body });
+    // Debug: Log raw values
+    console.log('Raw values:');
+    console.log('  title:', title, 'type:', typeof title);
+    console.log('  excerpt:', excerpt, 'type:', typeof excerpt);
+    console.log('  date:', date, 'type:', typeof date);
+    console.log('  body:', body, 'type:', typeof body);
 
     // Trim values first
     title = (title || '').trim();
@@ -56,12 +67,17 @@ app.post('/api/journal', (req, res) => {
     body = (body || '').trim();
 
     // Debug: Log after trimming
-    console.log('After trimming:', { title, excerpt, body });
+    console.log('After trimming:');
+    console.log('  title:', title, 'length:', title.length);
+    console.log('  excerpt:', excerpt, 'length:', excerpt.length);
+    console.log('  body:', body, 'length:', body.length);
 
     // Validate required fields after trimming
     if (!title || !excerpt) {
-        console.log('Validation failed. Title:', title, 'Excerpt:', excerpt);
-        return res.status(400).json({ error: 'UPDATED ERROR - Title and excerpt are required' });
+        console.log('❌ VALIDATION FAILED');
+        console.log('  title is empty:', !title);
+        console.log('  excerpt is empty:', !excerpt);
+        return res.status(400).json({ error: 'DEBUG: Title and excerpt are required. Received: ' + JSON.stringify({title, excerpt}) });
     }
 
     // Read current journal entries
@@ -93,7 +109,7 @@ app.post('/api/journal', (req, res) => {
                 console.error('Failed to write journal.json:', writeErr);
                 return res.status(500).json({ error: 'Failed to save entry' });
             }
-            console.log('Entry saved successfully:', newEntry);
+            console.log('✅ Entry saved successfully:', newEntry);
             res.status(201).json({ success: true, entry: newEntry });
         });
     });
