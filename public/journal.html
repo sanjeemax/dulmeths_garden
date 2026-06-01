@@ -23,7 +23,7 @@
     <form id="entryForm" method="post" action="/api/journal" aria-label="Add journal entry">
       <input id="title" name="title" placeholder="Title" required />
       <input id="date" name="date" type="date" />
-      <textarea id="excerpt" name="excerpt" placeholder="Short excerpt (required)"></textarea>
+      <textarea id="excerpt" name="excerpt" placeholder="Short excerpt (required)" required></textarea>
       <textarea id="body" name="body" placeholder="Optional full body"></textarea>
       <button type="submit">Add entry</button>
       <div id="formMsg" style="margin-top:.5rem;color:#556"></div>
