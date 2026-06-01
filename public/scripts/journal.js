@@ -110,36 +110,43 @@ function copyRemoteToLocal(remoteEntry){
   renderUpdates();
 }
 
-addUpdateBtn.addEventListener('click', ()=>{
-  if(editingLocalIndex !== null){
-    saveEdit();
-    return;
-  }
-  const title = (updTitle.value || '').trim();
-  const body = (updBody.value || '').trim();
-  const dateVal = updDate.value ? new Date(updDate.value).getTime() : Date.now();
-  if(!body && !title) return;
-  const entry = { title: title || 'Update', body, date: dateVal, local:true };
-  localUpdates.unshift(entry);
-  localStorage.setItem('dulmethUpdates', JSON.stringify(localUpdates));
-  updTitle.value = ''; updBody.value = ''; updDate.value = '';
-  renderUpdates();
-});
+// Only add event listeners if these elements exist (for updates page)
+if (addUpdateBtn) {
+  addUpdateBtn.addEventListener('click', ()=>{
+    if(editingLocalIndex !== null){
+      saveEdit();
+      return;
+    }
+    const title = (updTitle.value || '').trim();
+    const body = (updBody.value || '').trim();
+    const dateVal = updDate.value ? new Date(updDate.value).getTime() : Date.now();
+    if(!body && !title) return;
+    const entry = { title: title || 'Update', body, date: dateVal, local:true };
+    localUpdates.unshift(entry);
+    localStorage.setItem('dulmethUpdates', JSON.stringify(localUpdates));
+    updTitle.value = ''; updBody.value = ''; updDate.value = '';
+    renderUpdates();
+  });
+}
 
-downloadUpdatesBtn.addEventListener('click', ()=>{
-  const blob = new Blob([JSON.stringify(mergedUpdates(), null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'dulmeth-updates.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-});
+if (downloadUpdatesBtn) {
+  downloadUpdatesBtn.addEventListener('click', ()=>{
+    const blob = new Blob([JSON.stringify(mergedUpdates(), null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'dulmeth-updates.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+}
 
-clearLocalBtn.addEventListener('click', ()=>{
-  if(!confirm('Clear local (unsent) updates?')) return;
-  localUpdates = [];
-  localStorage.removeItem('dulmethUpdates');
-  editingLocalIndex = null;
-  addUpdateBtn.textContent = 'Add Update';
-  renderUpdates();
-});
+if (clearLocalBtn) {
+  clearLocalBtn.addEventListener('click', ()=>{
+    if(!confirm('Clear local (unsent) updates?')) return;
+    localUpdates = [];
+    localStorage.removeItem('dulmethUpdates');
+    editingLocalIndex = null;
+    addUpdateBtn.textContent = 'Add Update';
+    renderUpdates();
+  });
+}
 
 /* journal entry rendering and submission */
 (function(){
@@ -184,25 +191,13 @@ clearLocalBtn.addEventListener('click', ()=>{
     form.addEventListener('submit', function(e){
       e.preventDefault();
       msg.textContent = 'Saving…';
-      
-      // Debug: Log raw values from form
-      console.log('=== FORM SUBMISSION ===');
-      console.log('title element:', el('title'));
-      console.log('title value:', el('title').value);
-      console.log('excerpt element:', el('excerpt'));
-      console.log('excerpt value:', el('excerpt').value);
-      console.log('date value:', el('date').value);
-      console.log('body value:', el('body').value);
-      
       var payload = {
         title: el('title').value.trim(),
         date: el('date').value || undefined,
         excerpt: el('excerpt').value.trim(),
         body: el('body').value.trim()
       };
-      
-      console.log('Payload being sent:', payload);
-      
+      console.log('Submitting payload:', payload);
       fetch('/api/journal', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
@@ -211,8 +206,10 @@ clearLocalBtn.addEventListener('click', ()=>{
         return res.json().then(function(j){ return {status: res.status, body: j}; });
       }).then(function(r){
         if (r.status >= 200 && r.status < 300) {
-          // Redirect to the journal page so the user sees the updated read-only list
-          window.location.href = '/journal.html';
+          msg.textContent = 'Entry saved successfully! Refreshing...';
+          setTimeout(() => {
+            window.location.href = '/journal.html';
+          }, 1000);
           return;
         } else {
           msg.textContent = 'Failed: ' + (r.body && r.body.error ? r.body.error : 'server error');
