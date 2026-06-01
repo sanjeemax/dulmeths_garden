@@ -47,14 +47,21 @@ app.post('/api/journal', (req, res) => {
     const journalPath = path.join(__dirname, '../public/journal.json');
     let { title, date, excerpt, body } = req.body;
 
+    // Debug: Log what we received
+    console.log('POST /api/journal received:', { title, date, excerpt, body });
+
     // Trim values first
     title = (title || '').trim();
     excerpt = (excerpt || '').trim();
     body = (body || '').trim();
 
+    // Debug: Log after trimming
+    console.log('After trimming:', { title, excerpt, body });
+
     // Validate required fields after trimming
     if (!title || !excerpt) {
-        return res.status(400).json({ error: 'Title and excerpt are required' });
+        console.log('Validation failed. Title:', title, 'Excerpt:', excerpt);
+        return res.status(400).json({ error: 'UPDATED ERROR - Title and excerpt are required' });
     }
 
     // Read current journal entries
@@ -86,6 +93,7 @@ app.post('/api/journal', (req, res) => {
                 console.error('Failed to write journal.json:', writeErr);
                 return res.status(500).json({ error: 'Failed to save entry' });
             }
+            console.log('Entry saved successfully:', newEntry);
             res.status(201).json({ success: true, entry: newEntry });
         });
     });
