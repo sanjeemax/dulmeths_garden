@@ -184,12 +184,25 @@ clearLocalBtn.addEventListener('click', ()=>{
     form.addEventListener('submit', function(e){
       e.preventDefault();
       msg.textContent = 'Saving…';
+      
+      // Debug: Log raw values from form
+      console.log('=== FORM SUBMISSION ===');
+      console.log('title element:', el('title'));
+      console.log('title value:', el('title').value);
+      console.log('excerpt element:', el('excerpt'));
+      console.log('excerpt value:', el('excerpt').value);
+      console.log('date value:', el('date').value);
+      console.log('body value:', el('body').value);
+      
       var payload = {
         title: el('title').value.trim(),
         date: el('date').value || undefined,
         excerpt: el('excerpt').value.trim(),
         body: el('body').value.trim()
       };
+      
+      console.log('Payload being sent:', payload);
+      
       fetch('/api/journal', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
