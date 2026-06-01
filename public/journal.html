@@ -19,8 +19,7 @@
     <h1>Garden Journal — Add an entry (read-only view)</h1>
     <p class="note">Entries are added to journal.json and appear as read-only on the gallery page.</p>
 
-    <!-- method=post and action ensure non-JS fallback works (server redirects back after write) -->
-    <form id="entryForm" method="post" action="/api/journal" aria-label="Add journal entry">
+    <form id="entryForm" aria-label="Add journal entry">
       <input id="title" name="title" placeholder="Title" required />
       <input id="date" name="date" type="date" />
       <textarea id="excerpt" name="excerpt" placeholder="Short excerpt (required)" required></textarea>
