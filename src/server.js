@@ -91,7 +91,7 @@ function verifyWebhookSignature(body, signature) {
         if (!isValid) {
             console.warn('❌ Webhook signature verification failed');
         }
-        
+        console.warn('❌ Webhook signature verification success');
         return isValid;
     } catch (err) {
         console.error('❌ Error verifying webhook signature:', err);
@@ -192,127 +192,49 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// ========================================
-// WEBHOOK EVENTS (POST)
-// ========================================
-/**
- * POST /webhook - Unified webhook handler for all Facebook events
- * Handles:
- * - Reaction/Like events from Page
- * - Messaging events from Messenger
- * - Comment events
- */
-app.post('/webhook', async (req, res) => {
-    // Verify webhook signature for security
-    const signature = req.headers['x-hub-signature-256'];
-    if (!verifyWebhookSignature(req.rawBody || JSON.stringify(req.body), signature)) {
-        console.warn('⚠️  Ignoring webhook with invalid signature');
-        return res.sendStatus(403);
-    }
-
+// POST: Real-time Event Receiver
+app.post("/webhook", async (req, res) => {
     const body = req.body;
 
-    // Acknowledge receipt immediately (Meta expects <5s response time)
-    res.status(200).send('EVENT_RECEIVED');
+    // Immediately tell Meta we got the request to avoid timeout retries (under 5 seconds)
+    res.sendStatus(200);
+
+    // Stop processing early if the body payload lacks structural format
+    if (body.object !== 'page' || !body.entry || !Array.isArray(body.entry)) {
+        return;
+    }
 
     try {
-        // ========================================
-        // HANDLE PAGE OBJECT (Messaging & Comments)
-        // ========================================
-        if (body.object === 'page') {
-            console.log("📨 Processing page webhook...");
+        // Deep loop through entries and changes array to capture all batched updates safely
+        for (const entry of body.entry) {
+            if (!entry.changes || !Array.isArray(entry.changes)) continue;
 
-            if (!body.entry || !Array.isArray(body.entry)) {
-                console.log('ℹ️  No entries in webhook body');
-                return;
-            }
+            for (const change of entry.changes) {
+                if (change.field !== 'feed' || !change.value) continue;
 
-            // Iterate over each entry - there may be multiple if batched
-            for (const entry of body.entry) {
-                // Handle messaging events (messages, postbacks, etc.)
-                if (entry.messaging && Array.isArray(entry.messaging)) {
-                    for (const webhook_event of entry.messaging) {
-                        // Skip if no event data
-                        if (!webhook_event) continue;
+                const value = change.value;
+                const postId = value.post_id;
 
-                        // Handle incoming messages
-                        if (webhook_event.message) {
-                            const sender_id = webhook_event.sender?.id;
-                            const message = webhook_event.message;
-                            console.log('💬 Message from sender:', sender_id, '|', message.text || '[non-text content]');
-                            // TODO: Add your message handling logic here
-                        }
+                console.log(`📡 Event received: [Item: ${value.item}] [Verb: ${value.verb}] [Post: ${postId}]`);
 
-                        // Handle postbacks (button clicks)
-                        if (webhook_event.postback) {
-                            const sender_id = webhook_event.sender?.id;
-                            const payload = webhook_event.postback?.payload;
-                            console.log('🔘 Postback from sender:', sender_id, '| Payload:', payload);
-                            // TODO: Add your postback handling logic here
-                        }
-
-                        // Handle delivery confirmations
-                        if (webhook_event.delivery) {
-                            console.log('✅ Message delivered:', webhook_event.delivery);
-                        }
-
-                        // Handle read receipts
-                        if (webhook_event.read) {
-                            console.log('👁️  Message read by:', webhook_event.sender?.id);
-                        }
-                    }
+                // Filter on Like Reaction updates specifically
+                if (value.item === "reaction" && value.reaction_type === "like") {
+                    console.log(`👍 LIKE alteration detected (Verb: ${value.verb}). Updating count...`);
+                    const freshLikeCount = await getLikeCount(postId);
+                    await updateLikeCountInFirebase(postId, freshLikeCount);
                 }
 
-                // Handle feed events (comments, reactions, etc.)
-                if (entry.changes && Array.isArray(entry.changes)) {
-                    for (const change of entry.changes) {
-                        if (!change.value) continue;
-
-                        const value = change.value;
-                        const postId = value.post_id;
-
-                        console.log("📊 Feed event - Type:", value.item, "| Verb:", value.verb, "| Post:", postId);
-
-                        // =================================
-                        // LIKE / REACTION EVENT
-                        // =================================
-                        if (value.item === "reaction" && value.reaction_type === "like") {
-                            console.log("👍 LIKE detected on post:", postId);
-
-                            try {
-                                const likeCount = await getLikeCount(postId);
-                                console.log("📈 Current like count:", likeCount);
-                                await updateLikeCountInFirebase(postId, likeCount);
-                            } catch (err) {
-                                console.error("❌ Failed to process like event:", err.message);
-                            }
-                        }
-
-                        // =================================
-                        // COMMENT EVENT
-                        // =================================
-                        if (value.item === "comment") {
-                            console.log("💬 Comment event - Post:", postId, "| Message:", value.message);
-                            // TODO: Add your comment handling logic here
-                        }
-
-                        // =================================
-                        // OTHER FEED EVENTS
-                        // =================================
-                        if (value.item === "status") {
-                            console.log("📝 Status update on post:", postId);
-                        }
-                    }
+                // Optional diagnostic tracker for comment tracking
+                if (value.item === "comment" && value.verb === "add") {
+                    console.log(`💬 New comment added: "${value.message}"`);
                 }
             }
-        } else {
-            console.warn('⚠️  Unknown webhook object type:', body.object);
         }
-
     } catch (err) {
-        console.error("❌ Webhook processing error:", err);
+        console.error("❌ Critical processing loop failure:", err);
     }
 });
+
 
 // ========================================
 // JOURNAL ENDPOINTS
