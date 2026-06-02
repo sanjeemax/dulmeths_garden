@@ -19,6 +19,16 @@ if (!PAGE_ACCESS_TOKEN) {
     console.warn('⚠️  WARNING: PAGE_ACCESS_TOKEN is not set in environment variables');
 }
 
+
+// ========================================
+// ENVIRONMENT CONFIGURATION
+// ========================================
+
+// Validate required environment variables
+if (!PAGE_ACCESS_TOKEN) {
+    console.warn('⚠️  WARNING: PAGE_ACCESS_TOKEN is not set in environment variables');
+}
+
 // ========================================
 // FIREBASE INITIALIZATION
 // ========================================
@@ -26,10 +36,17 @@ const admin = require("firebase-admin");
 
 let serviceAccount;
 try {
-    serviceAccount = require(SERVICE_ACCOUNT_KEY_PATH);
+    // 1. First, check if the credentials exist as an environment string (Render/Production setup)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } 
+    // 2. Fallback to local physical file if it exists (Local/Development backup)
+    else {
+        const filePath = process.env.SERVICE_ACCOUNT_KEY_PATH || './serviceAccountKey.json';
+        serviceAccount = require(path.resolve(filePath));
+    }
 } catch (err) {
-    console.error('❌ Failed to load Firebase service account key:', err.message);
-    console.error('Please ensure SERVICE_ACCOUNT_KEY_PATH is correct:', SERVICE_ACCOUNT_KEY_PATH);
+    console.error('❌ Failed to load Firebase credentials:', err.message);
     process.exit(1);
 }
 
