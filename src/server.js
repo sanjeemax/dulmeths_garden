@@ -255,27 +255,26 @@ app.post("/webhook", async (req, res) => {
                 console.log("📌 Post ID:", value.post_id);
                 console.log("📌 Reaction Type:", value.reaction_type);
 
+                if (
+                    value.item === "reaction" &&
+                    value.reaction_type === "like"
+                ) {
+                    console.log("👍 LIKE DETECTED");
 
-                if (change.item === "reaction" && change.reaction_type === "like") {
+                    const postId = value.post_id;
 
-                    console.log(`👍 LIKE EVENT: ${change.verb}`);
-
-                    const postId = change.post_id;
                     if (!postId) {
-                        console.log("❌ Missing post_id");
+                        console.log("❌ Missing post ID");
                         return;
                     }
 
-                    // ALWAYS recompute from Graph API (source of truth)
                     const likeCount = await getLikeCount(postId);
 
-                    console.log("📊 Synced Like Count:", likeCount);
+                    console.log("📊 Like Count:", likeCount);
 
                     await updateLikeCountInFirebase(postId, likeCount);
-                    console.log("✅ Firebase update complete");
-                }
-                else {
-                    console.log("✅ Something else happened - not a like reaction. Ignoring.");
+                } else {
+                    console.log("❌ Ignored event:", value);
                 }
          
 
