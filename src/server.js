@@ -197,6 +197,14 @@ app.get('/webhook', (req, res) => {
     }
 });
 
+
+app.post("/webhook", (req, res) => {
+    console.log("🔥 FACEBOOK HIT RECEIVED");
+    console.log(JSON.stringify(req.body, null, 2));
+    res.sendStatus(200);
+});
+
+
 app.post("/webhook", async (req, res) => {
 
     console.log("====================================");
