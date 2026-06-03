@@ -198,12 +198,12 @@ app.get('/webhook', (req, res) => {
 });
 
 
-app.post("/webhook", (req, res) => {
+/*app.post("/webhook", (req, res) => {
     console.log("🔥 FACEBOOK HIT RECEIVED");
     console.log(JSON.stringify(req.body, null, 2));
     res.sendStatus(200);
 });
-
+*/
 
 app.post("/webhook", async (req, res) => {
 
@@ -255,33 +255,30 @@ app.post("/webhook", async (req, res) => {
                 console.log("📌 Post ID:", value.post_id);
                 console.log("📌 Reaction Type:", value.reaction_type);
 
-                if (
-                    value.item === "reaction" &&
-                    value.reaction_type === "like"
-                ) {
 
-                    console.log("👍 LIKE DETECTED");
+                if (change.item === "reaction" && change.reaction_type === "like") {
 
-                    const postId = value.post_id;
+                    console.log(`👍 LIKE EVENT: ${change.verb}`);
 
+                    const postId = change.post_id;
                     if (!postId) {
-                        console.log("❌ Missing post ID");
-                        continue;
+                        console.log("❌ Missing post_id");
+                        return;
                     }
 
-                    const freshLikeCount = await getLikeCount(postId);
+                    // ALWAYS recompute from Graph API (source of truth)
+                    const likeCount = await getLikeCount(postId);
 
-                    console.log(
-                        `📊 Graph API returned ${freshLikeCount} likes for ${postId}`
-                    );
+                    console.log("📊 Synced Like Count:", likeCount);
 
-                    await updateLikeCountInFirebase(
-                        postId,
-                        freshLikeCount
-                    );
-
+                    await updateLikeCountInFirebase(postId, likeCount);
                     console.log("✅ Firebase update complete");
                 }
+                else {
+                    console.log("✅ Something else happened - not a like reaction. Ignoring.");
+                }
+         
+
             }
         }
 
