@@ -19,7 +19,12 @@ if (!PAGE_ACCESS_TOKEN) {
     console.warn('⚠️  WARNING: PAGE_ACCESS_TOKEN is not set in environment variables');
 }
 
-
+app.use((req, res, next) => {
+    console.log(
+        `[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`
+    );
+    next();
+});
 // ========================================
 // ENVIRONMENT CONFIGURATION
 // ========================================
@@ -91,7 +96,7 @@ function verifyWebhookSignature(body, signature) {
         if (!isValid) {
             console.warn('❌ Webhook signature verification failed');
         }
-        console.warn('❌ Webhook signature verification success');
+        console.log('✅  Webhook signature verification success');
         return isValid;
     } catch (err) {
         console.error('❌ Error verifying webhook signature:', err);
@@ -100,7 +105,7 @@ function verifyWebhookSignature(body, signature) {
 }
 
 // Custom middleware to store raw body for signature verification
-app.use((req, res, next) => {
+/*app.use((req, res, next) => {
     let rawBody = '';
     req.on('data', chunk => {
         rawBody += chunk.toString();
@@ -110,7 +115,7 @@ app.use((req, res, next) => {
         next();
     });
 });
-
+*/
 // ========================================
 // FACEBOOK GRAPH API FUNCTIONS
 // ========================================
@@ -192,49 +197,100 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// POST: Real-time Event Receiver
 app.post("/webhook", async (req, res) => {
-    const body = req.body;
 
-    // Immediately tell Meta we got the request to avoid timeout retries (under 5 seconds)
+    console.log("====================================");
+    console.log("📥 WEBHOOK REQUEST RECEIVED");
+    console.log("⏰ Time:", new Date().toISOString());
+    console.log("📋 Headers:", JSON.stringify(req.headers, null, 2));
+    console.log("📦 Body:", JSON.stringify(req.body, null, 2));
+    console.log("====================================");
+
     res.sendStatus(200);
 
-    // Stop processing early if the body payload lacks structural format
-    if (body.object !== 'page' || !body.entry || !Array.isArray(body.entry)) {
+    const body = req.body;
+
+    if (!body) {
+        console.log("❌ No body received");
+        return;
+    }
+
+    if (body.object !== 'page') {
+        console.log("⚠️ Ignoring non-page object:", body.object);
+        return;
+    }
+
+    if (!body.entry) {
+        console.log("⚠️ No entry array found");
         return;
     }
 
     try {
-        // Deep loop through entries and changes array to capture all batched updates safely
         for (const entry of body.entry) {
-            if (!entry.changes || !Array.isArray(entry.changes)) continue;
+
+            console.log("📌 Entry:", JSON.stringify(entry, null, 2));
+
+            if (!entry.changes) {
+                console.log("⚠️ Entry contains no changes");
+                continue;
+            }
 
             for (const change of entry.changes) {
-                if (change.field !== 'feed' || !change.value) continue;
 
-                const value = change.value;
-                const postId = value.post_id;
+                console.log("🔄 Change:", JSON.stringify(change, null, 2));
 
-                console.log(`📡 Event received: [Item: ${value.item}] [Verb: ${value.verb}] [Post: ${postId}]`);
+                const value = change.value || {};
 
-                // Filter on Like Reaction updates specifically
-                if (value.item === "reaction" && value.reaction_type === "like") {
-                    console.log(`👍 LIKE alteration detected (Verb: ${value.verb}). Updating count...`);
+                console.log("📌 Field:", change.field);
+                console.log("📌 Item:", value.item);
+                console.log("📌 Verb:", value.verb);
+                console.log("📌 Post ID:", value.post_id);
+                console.log("📌 Reaction Type:", value.reaction_type);
+
+                if (
+                    value.item === "reaction" &&
+                    value.reaction_type === "like"
+                ) {
+
+                    console.log("👍 LIKE DETECTED");
+
+                    const postId = value.post_id;
+
+                    if (!postId) {
+                        console.log("❌ Missing post ID");
+                        continue;
+                    }
+
                     const freshLikeCount = await getLikeCount(postId);
-                    await updateLikeCountInFirebase(postId, freshLikeCount);
-                }
 
-                // Optional diagnostic tracker for comment tracking
-                if (value.item === "comment" && value.verb === "add") {
-                    console.log(`💬 New comment added: "${value.message}"`);
+                    console.log(
+                        `📊 Graph API returned ${freshLikeCount} likes for ${postId}`
+                    );
+
+                    await updateLikeCountInFirebase(
+                        postId,
+                        freshLikeCount
+                    );
+
+                    console.log("✅ Firebase update complete");
                 }
             }
         }
+
     } catch (err) {
-        console.error("❌ Critical processing loop failure:", err);
+        console.error("💥 WEBHOOK PROCESSING ERROR");
+        console.error(err);
     }
 });
 
+app.get('/webhook-test', (req, res) => {
+    console.log('🧪 WEBHOOK TEST HIT');
+
+    res.json({
+        success: true,
+        timestamp: new Date().toISOString()
+    });
+});
 
 // ========================================
 // JOURNAL ENDPOINTS
@@ -381,6 +437,24 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error' });
 });
 
+console.log("========== CONFIG ==========");
+console.log("PORT:", PORT);
+
+console.log(
+    "PAGE_ACCESS_TOKEN:",
+    PAGE_ACCESS_TOKEN
+        ? `SET (${PAGE_ACCESS_TOKEN.length} chars)`
+        : "MISSING"
+);
+
+console.log(
+    "WEBHOOK_VERIFY_TOKEN:",
+    WEBHOOK_VERIFY_TOKEN
+        ? "SET"
+        : "MISSING"
+);
+
+console.log("============================");
 // ========================================
 // SERVER START
 // ========================================
