@@ -161,18 +161,102 @@ async function getLikeCount(postId) {
  */
 async function updateLikeCountInFirebase(postId, likeCount) {
     try {
-        await db.ref(`reactions/${postId}`).update({
-            likeCount: likeCount,
+        await db.ref(`posts/${postId}/stats`).update({
+            likeCount,
             updatedAt: Date.now()
         });
 
-        console.log("✅ Firebase RTDB updated - Post:", postId, "Likes:", likeCount);
+        console.log("✅ Updated likes:", postId, likeCount);
+
     } catch (err) {
-        console.error("❌ Firebase update failed for post", postId, ":", err.message);
-        throw err;
+        console.error("❌ Like update failed:", err.message);
     }
 }
 
+async function savePostToFirebase(postId, value) {
+    const facebookUrl = `https://www.facebook.com/${postId}`;
+
+    const shortCode = await createUniqueShortCode();
+
+    const updates = {};
+
+    // 1. Save post data
+    updates[`posts/${postId}`] = {
+        postId,
+        facebookUrl,
+        imageUrl: value.link || "",
+        createdAt: value.created_time || Date.now(),
+        likeCount: 0,
+        updatedAt: Date.now()
+    };
+
+    // 2. Save short link mapping
+    updates[`shortlinks/${shortCode}`] = {
+        postId,
+        createdAt: Date.now()
+    };
+
+    await db.ref().update(updates);
+
+    console.log("✅ Post saved + short link created:", shortCode);
+
+    return shortCode;
+}
+
+const CHARSET =
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+function generateShortCode(length = 6) {
+    let result = "";
+    for (let i = 0; i < length; i++) {
+        result += CHARSET.charAt(
+            Math.floor(Math.random() * CHARSET.length)
+        );
+    }
+    return result;
+}
+
+async function createUniqueShortCode() {
+    const ref = db.ref("shortlinks");
+
+    while (true) {
+        const code = generateShortCode();
+
+        const snapshot = await ref.child(code).once("value");
+
+        if (!snapshot.exists()) {
+            return code; // safe to use
+        }
+    }
+}
+
+app.get("/:code", async (req, res) => {
+    const { code } = req.params;
+
+    try {
+        const snap = await db.ref(`shortlinks/${code}`).once("value");
+
+        if (!snap.exists()) {
+            return res.status(404).send("Invalid link");
+        }
+
+        const { postId } = snap.val();
+
+        const postSnap = await db.ref(`posts/${postId}`).once("value");
+
+        if (!postSnap.exists()) {
+            return res.status(404).send("Post not found");
+        }
+
+        const post = postSnap.val();
+
+        return res.redirect(post.facebookUrl);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Server error");
+    }
+});
 // ========================================
 // WEBHOOK VERIFICATION (GET)
 // ========================================
@@ -273,7 +357,27 @@ app.post("/webhook", async (req, res) => {
                     console.log("📊 Like Count:", likeCount);
 
                     await updateLikeCountInFirebase(postId, likeCount);
-                } else {
+                } 
+                if (
+                    change.field === "feed" &&
+                    value.verb === "add" &&
+                    value.published === 1
+                ) {
+                    console.log("🆕 NEW FACEBOOK POST");
+
+                    const postId = value.post_id;
+
+                    const shortCode = generateShortCode();
+
+
+                    await savePostToFirebase(value.post_id, value);
+
+                    console.log(
+                        `✅ Saved post ${postId} with short code ${shortCode}`
+                    );
+                }
+                
+                else {
                     console.log("❌ Ignored event:", value);
                 }
          
