@@ -275,31 +275,49 @@ function escapeHtml(s = "") {
 }
 
 
-app.get("/:code", async (req, res) => {
+ app.get("/:code", async (req, res) => {
     const { code } = req.params;
+    const ua = req.get("user-agent") || "";
+    const ip = req.headers["x-forwarded-for"] || req.ip;
 
     try {
         const snap = await db.ref(`shortlinks/${code}`).once("value");
-        if (!snap.exists()) return res.status(404).send("Invalid link");
+        if (!snap.exists()) {
+            console.warn(`[shortlink] code=${code} NOT FOUND  ip=${ip}`);
+            return res.status(404).send("Invalid link");
+        }
 
         const { postId } = snap.val();
+        console.log(`[shortlink] code=${code} -> postId=${postId}`);
 
         const postSnap = await db.ref(`posts/${postId}`).once("value");
-        if (!postSnap.exists()) return res.status(404).send("Post not found");
+        if (!postSnap.exists()) {
+            console.warn(`[shortlink] postId=${postId} NOT FOUND in posts/`);
+            return res.status(404).send("Post not found");
+        }
 
         const post = postSnap.val();
 
-        // Sanity check: warn loudly if the URL is the old format
-        if (!/facebook\.com\/share\//.test(post.facebookUrl)) {
-            console.warn(`facebookUrl for ${postId} is not a share URL: ${post.facebookUrl}`);
+        // ---- DIAGNOSTIC LOGS ----
+        console.log(`[shortlink] facebookUrl = ${post.facebookUrl}`);
+        console.log(`[shortlink] post keys   = ${Object.keys(post).join(",")}`);
+        const isShareUrl = /facebook\.com\/share\//.test(post.facebookUrl || "");
+        console.log(`[shortlink] isShareUrl  = ${isShareUrl}`);
+        console.log(`[shortlink] ua          = ${ua}`);
+        // -------------------------
+
+        if (!isShareUrl) {
+            console.warn(
+                `[shortlink] ⚠️  facebookUrl is NOT a share URL — ` +
+                `Facebook will likely show "broken link" to logged-out users.`
+            );
         }
 
-        // Don't cache — we want each scan to follow the latest target
         res.set("Cache-Control", "no-store");
         return res.redirect(302, post.facebookUrl);
 
     } catch (err) {
-        console.error(err);
+        console.error("[shortlink] error:", err);
         res.status(500).send("Server error");
     }
 });
