@@ -173,8 +173,31 @@ async function updateLikeCountInFirebase(postId, likeCount) {
     }
 }
 
+/**
+* Build a canonical Facebook post permalink from a webhook post_id.
+* Facebook webhook post_id is in the format "<pageId>_<storyId>".
+* The /permalink.php?story_fbid=...&id=... format works reliably for
+* both logged-in and logged-out viewers, with or without a page vanity URL.
+*
+* @param {string} postId - composite post id from Facebook (e.g. "123_456")
+* @returns {string} canonical Facebook post URL
+*/
+function buildFacebookPostUrl(postId) {
+if (!postId) return "https://www.facebook.com/";
+
+const parts = String(postId).split("_");
+if (parts.length === 2 && parts[0] && parts[1]) {
+const [pageId, storyId] = parts;
+return `https://www.facebook.com/permalink.php?story_fbid=${storyId}&id=${pageId}`;
+}
+
+// Unknown format — fall back to the raw id (legacy behaviour).
+return `https://www.facebook.com/${postId}`;
+}
+
 async function savePostToFirebase(postId, value) {
-    const facebookUrl = `https://www.facebook.com/${postId}`;
+    const facebookUrl = buildFacebookPostUrl(postId);
+
 
     const shortCode = await createUniqueShortCode();
 
@@ -298,23 +321,20 @@ function escapeHtml(s = "") {
 
         const post = postSnap.val();
 
-        // ---- DIAGNOSTIC LOGS ----
-        console.log(`[shortlink] facebookUrl = ${post.facebookUrl}`);
-        console.log(`[shortlink] post keys   = ${Object.keys(post).join(",")}`);
-        const isShareUrl = /facebook\.com\/share\//.test(post.facebookUrl || "");
-        console.log(`[shortlink] isShareUrl  = ${isShareUrl}`);
-        console.log(`[shortlink] ua          = ${ua}`);
-        // -------------------------
+// Always rebuild the target URL from postId so that legacy entries
+// (which may have a broken https://www.facebook.com/<pageId>_<storyId>
+// URL stored) are corrected on the fly.
+const targetUrl = buildFacebookPostUrl(postId);
 
-        if (!isShareUrl) {
-            console.warn(
-                `[shortlink] ⚠️  facebookUrl is NOT a share URL — ` +
-                `Facebook will likely show "broken link" to logged-out users.`
-            );
-        }
+// ---- DIAGNOSTIC LOGS ----
+console.log(`[shortlink] stored facebookUrl = ${post.facebookUrl}`);
+console.log(`[shortlink] redirect target = ${targetUrl}`);
+console.log(`[shortlink] post keys = ${Object.keys(post).join(",")}`);
+console.log(`[shortlink] ua = ${ua}`);
+// -------------------------
 
         res.set("Cache-Control", "no-store");
-        return res.redirect(302, post.facebookUrl);
+        return res.redirect(302, targetUrl);
 
     } catch (err) {
         console.error("[shortlink] error:", err);
