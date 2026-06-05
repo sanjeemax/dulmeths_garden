@@ -229,7 +229,7 @@ async function createUniqueShortCode() {
         }
     }
 }
-
+/*
 app.get("/:code", async (req, res) => {
     const { code } = req.params;
 
@@ -257,6 +257,94 @@ app.get("/:code", async (req, res) => {
         res.status(500).send("Server error");
     }
 });
+
+*/
+ // helper: derive pageId/postId from "<pageId>_<postId>" URLs if needed
+function extractIds(post) {
+    if (post.pageId && post.postId) {
+        return { pageId: post.pageId, postId: post.postId };
+    }
+    const m = (post.facebookUrl || "").match(/facebook\.com\/(\d+)_(\d+)/);
+    return m ? { pageId: m[1], postId: m[2] } : {};
+}
+
+function escapeHtml(s = "") {
+    return String(s).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+}
+
+app.get("/:code", async (req, res) => {
+    const { code } = req.params;
+
+    try {
+        const snap = await db.ref(`shortlinks/${code}`).once("value");
+        if (!snap.exists()) return res.status(404).send("Invalid link");
+
+        const { postId } = snap.val();
+
+        const postSnap = await db.ref(`posts/${postId}`).once("value");
+        if (!postSnap.exists()) return res.status(404).send("Post not found");
+
+        const post = postSnap.val();
+        const webUrl = post.facebookUrl;                 // ideally the share URL
+        const { pageId, postId: pid } = extractIds(post);
+
+        // If we have ids, build an FB-app deep link; else just use the web URL.
+        const appUrl = (pageId && pid)
+            ? `fb://facewebmodal/f?href=${encodeURIComponent(
+                `https://www.facebook.com/${pageId}_${pid}`)}`
+            : null;
+
+        res.set("Cache-Control", "no-store");
+        res.type("html").send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening Facebook…</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;text-align:center;
+       padding:2rem;color:#222}
+  a{color:#1877f2;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<p>Opening Facebook…</p>
+<p><a id="fallback" href="${escapeHtml(webUrl)}">Tap here if nothing happens</a></p>
+<script>
+  (function () {
+    var web = ${JSON.stringify(webUrl)};
+    var app = ${JSON.stringify(appUrl)};
+    var ua  = navigator.userAgent || "";
+    var isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+
+    // Desktop or no app URL: just go to the web URL.
+    if (!isMobile || !app) { location.replace(web); return; }
+
+    // Try the Facebook app; if it doesn't take over in 1.2s, go to web.
+    var fellBack = false;
+    var t = setTimeout(function () { fellBack = true; location.replace(web); }, 1200);
+
+    // If the page becomes hidden (the app took focus), cancel the fallback.
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden && !fellBack) clearTimeout(t);
+    });
+
+    // Trigger the deep link.
+    location.href = app;
+  })();
+</script>
+</body>
+</html>`);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Server error");
+    }
+});
+
+
 // ========================================
 // WEBHOOK VERIFICATION (GET)
 // ========================================
