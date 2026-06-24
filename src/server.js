@@ -297,6 +297,31 @@ function escapeHtml(s = "") {
     }[c]));
 }
 
+// ========================================
+// WEBHOOK VERIFICATION (GET)
+// ========================================
+/**
+ * GET /webhook - Facebook webhook verification endpoint
+ * Called by Facebook to verify your webhook URL during setup
+ */
+app.get('/webhook', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    // Check the mode and token sent are correct
+    if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
+        // Respond with 200 OK and challenge token from the request
+        console.log('✅ Webhook verified successfully');
+        res.status(200).send(challenge);
+    } else {
+        // Respond with '403 Forbidden' if verify tokens do not match
+        console.warn('❌ Webhook verification failed - Invalid token');
+        res.sendStatus(403);
+    }
+});
+
+
 
  app.get("/:code", async (req, res) => {
     const { code } = req.params;
@@ -321,17 +346,17 @@ function escapeHtml(s = "") {
 
         const post = postSnap.val();
 
-// Always rebuild the target URL from postId so that legacy entries
-// (which may have a broken https://www.facebook.com/<pageId>_<storyId>
-// URL stored) are corrected on the fly.
-const targetUrl = buildFacebookPostUrl(postId);
+        // Always rebuild the target URL from postId so that legacy entries
+        // (which may have a broken https://www.facebook.com/<pageId>_<storyId>
+        // URL stored) are corrected on the fly.
+        const targetUrl = buildFacebookPostUrl(postId);
 
-// ---- DIAGNOSTIC LOGS ----
-console.log(`[shortlink] stored facebookUrl = ${post.facebookUrl}`);
-console.log(`[shortlink] redirect target = ${targetUrl}`);
-console.log(`[shortlink] post keys = ${Object.keys(post).join(",")}`);
-console.log(`[shortlink] ua = ${ua}`);
-// -------------------------
+        // ---- DIAGNOSTIC LOGS ----
+        console.log(`[shortlink] stored facebookUrl = ${post.facebookUrl}`);
+        console.log(`[shortlink] redirect target = ${targetUrl}`);
+        console.log(`[shortlink] post keys = ${Object.keys(post).join(",")}`);
+        console.log(`[shortlink] ua = ${ua}`);
+        // -------------------------
 
         res.set("Cache-Control", "no-store");
         return res.redirect(302, targetUrl);
@@ -344,29 +369,7 @@ console.log(`[shortlink] ua = ${ua}`);
 
 
 
-// ========================================
-// WEBHOOK VERIFICATION (GET)
-// ========================================
-/**
- * GET /webhook - Facebook webhook verification endpoint
- * Called by Facebook to verify your webhook URL during setup
- */
-app.get('/webhook', (req, res) => {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
 
-    // Check the mode and token sent are correct
-    if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
-        // Respond with 200 OK and challenge token from the request
-        console.log('✅ Webhook verified successfully');
-        res.status(200).send(challenge);
-    } else {
-        // Respond with '403 Forbidden' if verify tokens do not match
-        console.warn('❌ Webhook verification failed - Invalid token');
-        res.sendStatus(403);
-    }
-});
 
 
 /*app.post("/webhook", (req, res) => {
