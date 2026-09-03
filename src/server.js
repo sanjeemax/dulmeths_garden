@@ -490,6 +490,28 @@ app.get('/webhook-test', (req, res) => {
     });
 });
 
+// ---------------------------------------------------------
+// DEBUG: force a like-count update in Firebase
+// Usage: GET /debug/set-like?postId=<postId>&count=<number>
+// This helps verify Firebase writes independently of Facebook webhooks.
+app.get('/debug/set-like', async (req, res) => {
+    const postId = req.query.postId;
+    const count = parseInt(req.query.count || '0', 10);
+
+    if (!postId) {
+        return res.status(400).json({ error: 'postId query parameter required' });
+    }
+
+    try {
+        await updateLikeCountInFirebase(postId, count);
+        console.log(`[debug] set-like -> postId=${postId} count=${count}`);
+        return res.json({ ok: true, postId, count });
+    } catch (err) {
+        console.error('[debug] set-like error', err.message);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
 // ========================================
 // JOURNAL ENDPOINTS
 // ========================================
@@ -542,9 +564,7 @@ app.post('/api/journal', (req, res) => {
                 entries = JSON.parse(data);
             } catch (parseErr) {
                 console.error('Failed to parse journal.json:', parseErr.message);
-                entries = [];
-            }
-        }
+                entries = []; 
 
         // Create new entry
         const newEntry = {
