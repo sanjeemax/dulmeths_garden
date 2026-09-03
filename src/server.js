@@ -560,13 +560,15 @@ app.post('/api/journal', (req, res) => {
     fs.readFile(journalPath, 'utf8', (err, data) => {
         let entries = [];
         if (!err && data) {
-            try {
-                entries = JSON.parse(data);
-            } catch (parseErr) {
-                console.error('Failed to parse journal.json:', parseErr.message);
-                entries = []; 
+                    try {
+                    entries = JSON.parse(data);
+                } catch (parseErr) {
+                    console.error('Failed to parse journal.json:', parseErr.message);
+                    entries = [];
+                }
+            }
 
-        // Create new entry
+            // Create new entry
         const newEntry = {
             title: title,
             date: date || new Date().toISOString().split('T')[0],
